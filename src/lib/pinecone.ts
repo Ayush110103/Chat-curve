@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import { Pinecone, PineconeRecord } from "@pinecone-database/pinecone";
 import { downloadFromS3 } from "./s3-server";
 import { PDFLoader } from "langchain/document_loaders/fs/pdf";
@@ -24,38 +27,64 @@ type PDFPage = {
 };
 
 export async function loadS3IntoPinecone(fileKey: string) {
-  // 1. obtain the pdf -> downlaod and read from pdf
-  console.log("downloading s3 into file system");
+  console.log("📥 Downloading S3 file into the system...");
   const file_name = await downloadFromS3(fileKey);
   if (!file_name) {
-    throw new Error("could not download from s3");
+    throw new Error("❌ Failed: Could not download from S3.");
   }
-  console.log("loading pdf into memory" + file_name);
+
+  console.log(`📄 Loading PDF into memory: ${file_name}`);
   const loader = new PDFLoader(file_name);
   const pages = (await loader.load()) as PDFPage[];
 
-  // 2. split and segment the pdf
+  // 🔹 Split and Prepare Documents
   const documents = await Promise.all(pages.map(prepareDocument));
+  const flatDocuments = documents.flat();
 
-  // 3. vectorise and embed individual documents
-  const vectors = await Promise.all(documents.flat().map(embedDocument));
+  console.log(`🔍 Processing ${flatDocuments.length} document chunks...`);
 
-  // 4. upload to pinecone
+  // 🔹 Generate Embeddings
+  const vectors = (
+    await Promise.all(flatDocuments.map(embedDocument))
+  ).filter((v) => v !== null); // Remove failed embeddings
+
+  console.log(`✅ Successfully embedded ${vectors.length}/${flatDocuments.length} document chunks.`);
+
+  if (vectors.length === 0) {
+    throw new Error("❌ No valid embeddings generated. Skipping insertion.");
+  }
+
+  // 🔹 Insert into Pinecone in Batches
+  const batchSize = 50;
   const client = await getPineconeClient();
-  const pineconeIndex = await client.index("chatpdf");
+  const pineconeIndex = await client.index("chatcurve");
   const namespace = pineconeIndex.namespace(convertToAscii(fileKey));
 
-  console.log("inserting vectors into pinecone");
-  await namespace.upsert(vectors);
+  console.log("🚀 Inserting vectors into Pinecone...");
+  for (let i = 0; i < vectors.length; i += batchSize) {
+    const batch = vectors.slice(i, i + batchSize);
 
+    try {
+      await retryRequest(() => namespace.upsert(batch));
+      console.log(`✅ Inserted batch ${i / batchSize + 1}/${Math.ceil(vectors.length / batchSize)}`);
+    } catch (error) {
+      console.error(`❌ Error inserting batch ${i / batchSize + 1}:`, error);
+    }
+  }
+
+  console.log("🎯 All vectors successfully inserted into Pinecone.");
   return documents[0];
 }
 
 async function embedDocument(doc: Document) {
   try {
     const embeddings = await getEmbeddings(doc.pageContent);
-    const hash = md5(doc.pageContent);
+    if (!embeddings || embeddings.length !== 1536) {
+      console.error("⚠️ Invalid embedding detected. Skipping...");
+      return null;
+    }
 
+    const hash = md5(doc.pageContent);
     return {
       id: hash,
       values: embeddings,
@@ -65,8 +94,21 @@ async function embedDocument(doc: Document) {
       },
     } as PineconeRecord;
   } catch (error) {
-    console.log("error embedding document", error);
-    throw error;
+    console.log("❌ Error embedding document:", error);
+    return null;
+  }
+}
+
+async function retryRequest(fn: Function, retries = 3, delay = 2000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await fn();
+      return;
+    } catch (error) {
+      console.error(`⚠️ Attempt ${attempt} failed:`, error);
+      if (attempt === retries) throw error;
+      await new Promise((res) => setTimeout(res, delay)); // Wait before retrying
+    }
   }
 }
 
@@ -78,7 +120,7 @@ export const truncateStringByBytes = (str: string, bytes: number) => {
 async function prepareDocument(page: PDFPage) {
   let { pageContent, metadata } = page;
   pageContent = pageContent.replace(/\n/g, "");
-  // split the docs
+
   const splitter = new RecursiveCharacterTextSplitter();
   const docs = await splitter.splitDocuments([
     new Document({

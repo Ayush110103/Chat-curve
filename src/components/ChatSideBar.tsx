@@ -5,8 +5,6 @@ import React from "react";
 import { Button } from "./ui/button";
 import { MessageCircle, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import axios from "axios";
-import SubscriptionButton from "./SubscriptionButton";
 
 type Props = {
   chats: DrizzleChat[];
@@ -15,36 +13,35 @@ type Props = {
 };
 
 const ChatSideBar = ({ chats, chatId, isPro }: Props) => {
-  const [loading, setLoading] = React.useState(false);
-
   return (
-    <div className="w-full max-h-screen overflow-scroll soff p-4 text-gray-200 bg-gray-900">
+    <div className="w-full h-full overflow-y-auto p-6 text-gray-200 bg-gray-900">
+      {/* New Chat Button */}
       <Link href="/">
-        <Button className="w-full border-dashed border-white border">
-          <PlusCircle className="mr-2 w-4 h-4" />
+        <Button className="w-full py-3 border-dashed border-white border text-lg flex items-center justify-center">
+          <PlusCircle className="mr-3 w-6 h-6" />
           New Chat
         </Button>
       </Link>
 
-      <div className="flex max-h-screen overflow-scroll pb-20 flex-col gap-2 mt-4">
+      {/* Chats List */}
+      <div className="flex flex-col gap-4 mt-6">
         {chats.map((chat) => (
           <Link key={chat.id} href={`/chat/${chat.id}`}>
             <div
-              className={cn("rounded-lg p-3 text-slate-300 flex items-center", {
-                "bg-blue-600 text-white": chat.id === chatId,
-                "hover:text-white": chat.id !== chatId,
-              })}
+              className={cn(
+                "rounded-lg p-4 text-lg flex items-center cursor-pointer transition-all duration-200",
+                {
+                  "bg-blue-600 text-white shadow-lg": chat.id === chatId,
+                  "hover:bg-gray-700 hover:text-white": chat.id !== chatId,
+                }
+              )}
             >
-              <MessageCircle className="mr-2" />
-              <p className="w-full overflow-hidden text-sm truncate whitespace-nowrap text-ellipsis">
-                {chat.pdfName}
-              </p>
+              <MessageCircle className="mr-3 w-5 h-5" />
+              <p className="truncate">{chat.pdfName}</p>
             </div>
           </Link>
         ))}
       </div>
-
-   
     </div>
   );
 };

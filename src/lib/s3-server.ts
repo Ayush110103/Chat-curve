@@ -1,10 +1,11 @@
 import { S3 } from "@aws-sdk/client-s3";
 import fs from "fs";
+
 export async function downloadFromS3(file_key: string): Promise<string> {
   return new Promise(async (resolve, reject) => {
     try {
       const s3 = new S3({
-        region: "ap-southeast-1",
+        region: "ap-south-1",
         credentials: {
           accessKeyId: process.env.NEXT_PUBLIC_S3_ACCESS_KEY_ID!,
           secretAccessKey: process.env.NEXT_PUBLIC_S3_SECRET_ACCESS_KEY!,
@@ -14,6 +15,8 @@ export async function downloadFromS3(file_key: string): Promise<string> {
         Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME!,
         Key: file_key,
       };
+
+      console.log('Downloading file with key:', file_key);
 
       const obj = await s3.getObject(params);
       const file_name = `/tmp/elliott${Date.now().toString()}.pdf`;
@@ -30,13 +33,12 @@ export async function downloadFromS3(file_key: string): Promise<string> {
           });
         });
         // obj.Body?.pipe(fs.createWriteStream(file_name));
+      } else {
+        reject(new Error('Object body is not a readable stream'));
       }
     } catch (error) {
-      console.error(error);
+      console.error('Error downloading file:', error);
       reject(error);
-      return null;
     }
   });
 }
-
-// downloadFromS3("uploads/1693568801787chongzhisheng_resume.pdf");

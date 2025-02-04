@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { UserButton, auth } from "@clerk/nextjs";
+import { UserButton } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { ArrowRight, LogIn } from "lucide-react";
 import FileUpload from "@/components/FileUpload";
@@ -8,7 +9,8 @@ import SubscriptionButton from "@/components/SubscriptionButton";
 import { db } from "@/lib/db";
 import { chats } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-
+import dotenv from 'dotenv';
+dotenv.config();
 export default async function Home() {
   const { userId } = await auth();
   const isAuth = !!userId;
