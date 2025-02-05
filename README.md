@@ -1,4 +1,5 @@
 
+<<<<<<< HEAD
 ![1738721780309](image/README/1738721780309.png)
 
 ![1738722441670](image/README/1738722441670.png)
@@ -65,3 +66,5 @@ Follow the steps below to install and setup the project:
    ```bash
    npm run dev
    ```
+=======
+>>>>>>> e5ef65103035bac1b220bdb0f81f6467e871d780
