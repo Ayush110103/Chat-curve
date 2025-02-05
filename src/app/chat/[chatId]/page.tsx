@@ -6,41 +6,45 @@ import { chats } from "@/lib/db/schema";
 import { checkSubscription } from "@/lib/subscription";
 import { auth } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
-import { redirect } from "next/navigation";
-import React from "react";
+import { redirect, notFound } from "next/navigation";
+import { Suspense } from "react";
 
 type Props = {
-  params: {
-    chatId?: string;
-  };
+  params: { chatId?: string }; // Make `chatId` optional to avoid crashes
 };
 
 const ChatPage = async ({ params }: Props) => {
-  if (!params || !params.chatId) {
-    return redirect("/?error=invalid-chat-id");
+  // ✅ Ensure params are available before using them
+  const awaitedParams = await params;
+  if (!awaitedParams || !awaitedParams.chatId) {
+    return notFound(); // Show 404 page if no chatId
   }
 
-  // Ensure `chatId` is properly parsed
-  const chatId = Number(params.chatId);
+  // ✅ Safely parse `chatId`
+  const chatId = Number(awaitedParams.chatId);
   if (isNaN(chatId)) {
     return redirect("/?error=invalid-chat-id");
   }
 
+  // ✅ Authenticate user
   const { userId } = await auth();
   if (!userId) {
     return redirect("/sign-in");
   }
 
+  // ✅ Fetch user's chats
   const userChats = await db.select().from(chats).where(eq(chats.userId, userId));
   if (!userChats || userChats.length === 0) {
     return redirect("/?error=no-chats");
   }
 
+  // ✅ Validate if the chat belongs to the user
   const currentChat = userChats.find((chat) => chat.id === chatId);
   if (!currentChat) {
-    return redirect("/?error=chat-not-found");
+    return notFound(); // Show 404 if chat not found
   }
 
+  // ✅ Check user subscription
   const isPro = await checkSubscription();
 
   return (
@@ -59,7 +63,9 @@ const ChatPage = async ({ params }: Props) => {
 
         {/* Chat Component */}
         <div className="w-2/5 border-l border-gray-300 overflow-y-auto bg-white">
-          <ChatComponent chatId={chatId} />
+          <Suspense fallback={<div>Loading Chat...</div>}>
+            <ChatComponent chatId={chatId} />
+          </Suspense>
         </div>
       </div>
     </div>
